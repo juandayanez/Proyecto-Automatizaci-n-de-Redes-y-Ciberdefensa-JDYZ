@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Builder Pro - Ciberdefensa</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        /* Paleta de colores moderna y variables */
+        :root {
+            --primary: #4f46e5; /* Indigo moderno */
+            --primary-hover: #4338ca;
+            --bg-color: #f3f4f6; /* Gris muy suave para el fondo */
+            --surface: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --radius: 12px;
+        }
+
+        body { 
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; 
+            margin: 0; 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            display: flex; 
+            flex-direction: column; /* Cambio clave: Diseño en columna (arriba hacia abajo) */
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* --- NAVEGACIÓN SUPERIOR (NAVBAR) --- */
+        .top-navbar {
+            background-color: var(--surface);
+            padding: 0 24px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            z-index: 20;
+        }
+
+        .brand {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .menu-modulos {
+            display: flex;
+            gap: 10px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .tab-btn:hover {
+            background: #f3f4f6;
+            color: var(--text-main);
+        }
+
+        .tab-btn.active {
+            background: #eef2ff;
+            color: var(--primary);
+        }
+
+        /* --- PANEL DE CONTROL HORIZONTAL --- */
+        .toolbar {
+            background-color: var(--surface);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border-bottom: 1px solid var(--border);
+            z-index: 10;
+        }
+
+        .form-group-inline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group-inline label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .form-group-inline input {
+            width: 80px;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            text-align: center;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group-inline input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-action {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 9px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-action:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        /* --- CONTENIDO PRINCIPAL --- */
+        .main-content {
+            flex-grow: 1;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* El scroll lo manejan los módulos internos */
+        }
+
+        .modulo {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            flex-grow: 1;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            height: 100%;
+        }
+
+        .modulo.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modulo-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            font-size: 1.1rem;
+            background-color: #fafafa;
+        }
+
+        /* --- MÓDULOS ESPECÍFICOS --- */
+        #network-canvas { width: 100%; height: 100%; min-height: 400px; flex-grow: 1; background-color: #ffffff; }
+        
+        .table-container { flex-grow: 1; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 14px 24px; border-bottom: 1px solid var(--border); text-align: left; }
+        th { background-color: #f9fafb; position: sticky; top: 0; z-index: 1; color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+        tr:hover td { background-color: #f3f4f6; }
+        
+        .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+        .badge.active { background: #d1fae5; color: #065f46; }
+        .badge.inactive { background: #fee2e2; color: #991b1b; }
+
+        .btn-toggle { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; color: white; transition: 0.2s; }
+        .btn-toggle:hover { opacity: 0.9; }
+        .btn-toggle.disable { background-color: var(--danger); }
+        .btn-toggle.enable { background-color: var(--success); }
+
+        .total-budget { padding: 24px; text-align: right; font-size: 1.3rem; font-weight: 800; background: #f9fafb; border-top: 1px solid var(--border); color: var(--primary); }
+        
+        #script-output { flex-grow: 1; font-family: 'Fira Code', 'Consolas', monospace; padding: 20px; background: #0f172a; color: #38bdf8; border-radius: 8px; resize: none; border: none; font-size: 14px; white-space: pre-wrap; margin-top: 15px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+    <!-- NAVEGACIÓN SUPERIOR -->
+    <header class="top-navbar">
+        <div class="brand">
+            🌐 Network Builder Pro
+        </div>
+        
+        <nav class="menu-modulos">
+            <button id="btn-grafico" class="tab-btn active" onclick="cambiarModulo('grafico')">📍 Topología Lógica</button>
+            <button id="btn-inventario" class="tab-btn" onclick="cambiarModulo('inventario')">📋 IP Planning (IPv4/v6)</button>
+            <button id="btn-scripts" class="tab-btn" onclick="cambiarModulo('scripts')">🛡️ Ciberdefensa y Scripts</button>
+            <button id="btn-presupuesto" class="tab-btn" onclick="cambiarModulo('presupuesto')">💰 Presupuesto Comercial</button>
+        </nav>
+    </header>
+
+    <!-- PANEL DE CONTROL HORIZONTAL -->
+    <section class="toolbar">
+        <div class="form-group-inline">
+            <label for="pisos">Pisos (VLANs):</label>
+            <input type="number" id="pisos" min="1" max="20" value="3">
+        </div>
+        <div class="form-group-inline">
+            <label for="usuarios">Total de PCs:</label>
+            <input type="number" id="usuarios" min="1" max="200" value="10">
+        </div>
+        <div style="flex-grow: 1;"></div> <!-- Empuja el botón a la derecha -->
+        <button class="btn-action" onclick="generarInfraestructura()">⚡ Construir Infraestructura</button>
+    </section>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <main class="main-content">
+        
+        <!-- Módulo 1: Gráfico -->
+        <div id="mod-grafico" class="modulo active">
+            <div class="modulo-header">Visualización de Arquitectura Multicapa</div>
+            <div id="network-canvas"></div>
+        </div>
+
+        <!-- Módulo 2: Inventario -->
+        <div id="mod-inventario" class="modulo">
+            <div class="modulo-header">Control de Equipos, Subnetting y EUI-64</div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Dispositivo</th>
+                            <th>Tipo</th>
+                            <th>MAC Address</th>
+                            <th>Dirección IPv4</th>
+                            <th>Dirección IPv6 (EUI-64)</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-inventario"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Módulo 3: Scripts y Ciberdefensa -->
+        <div id="mod-scripts" class="modulo">
+            <div class="modulo-header">Generador Multi-Fabricante y Ciberdefensa Zero Trust</div>
+            <div style="padding: 24px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box;">
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <label style="font-weight: 600;">Seleccionar Equipo/Fabricante:</label>
+                    <select id="vendor-select" style="padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border); flex-grow: 1; font-size: 0.95rem; outline: none;">
+                        <option value="cisco">Router Core - Cisco IOS</option>
+                        <option value="huawei">Switches de Acceso - Huawei VRP</option>
+                        <option value="fortinet">Firewall Perimetral - Fortinet FortiOS</option>
+                        <option value="mikrotik">Router de Borde - MikroTik RouterOS</option>
+                    </select>
+                    <button class="btn-action" style="margin: 0; background: var(--text-main);" onclick="generarScripts()">Generar CLI</button>
+                </div>
+                <textarea id="script-output" readonly placeholder="Haz clic en 'Generar CLI' para compilar la configuración de red y seguridad..."></textarea>
+            </div>
+        </div>
+
+        <!-- Módulo 4: Presupuesto -->
+        <div id="mod-presupuesto" class="modulo">
+            <div class="modulo-header">Presupuesto Comercial (Mercado Libre Colombia)</div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Equipo</th>
+                            <th>Fabricante / Modelo de Referencia</th>
+                            <th style="text-align: center;">Cant. Activa</th>
+                            <th>Valor Unitario (COP)</th>
+                            <th>Subtotal (COP)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-presupuesto"></tbody>
+                </table>
+            </div>
+            <div class="total-budget">
+                Costo Total del Proyecto: <span id="presupuesto-total">$0</span> COP
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- LOGICA DE PROGRAMACIÓN (Igual, adaptada para el nuevo diseño) ---
+        let redGlobal = [];
+        let visNetwork = null;
+
+        const PRECIOS = {
+            'Core': { nombre: 'Router Cisco C1111-4P Enterprise', valor: 7600000 },
+            'Switch': { nombre: 'Switch Huawei S310-48P4S PoE+', valor: 3500000 },
+            'PC': { nombre: 'PC Portátil Lenovo V14 (Core i5 / Ryzen)', valor: 1700000 }
+        };
+
+        const generarMAC = () => {
+            const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+            return `00:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
+        };
+
+        const calcularEUI64 = (mac, prefijo) => {
+            if (!mac) return "-";
+            let partes = mac.split(':');
+            let primerByte = parseInt(partes[0], 16) ^ 2;
+            let eui64 = `${primerByte.toString(16).padStart(2, '0')}${partes[1]}:${partes[2]}ff:fe${partes[3]}:${partes[4]}${partes[5]}`;
+            return `${prefijo}${eui64}/64`;
+        };
+
+        const formatoMoneda = (valor) => {
+            return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor);
+        };
+
+        function generarInfraestructura() {
+            const numPisos = parseInt(document.getElementById('pisos').value);
+            const numUsuarios = parseInt(document.getElementById('usuarios').value);
+            redGlobal = [];
+            let pcIdCounter = 100;
+
+            redGlobal.push({ id: 0, nivel: 0, tipo: 'Core', nombre: 'R1-Core', fabricante: 'Cisco', mac: generarMAC(), ipv4: '192.168.0.1/24', ipv6: '2001:db8:acad::1/64', activo: true, padre: null });
+
+            let usuariosPorPiso = new Array(numPisos).fill(Math.floor(numUsuarios / numPisos));
+            let residuo = numUsuarios % numPisos;
+            for(let i=0; i<residuo; i++) usuariosPorPiso[i]++;
+
+            for (let i = 1; i <= numPisos; i++) {
+                let vlanId = i * 10;
+                let prefijoIPv6 = `2001:db8:acad:${vlanId}:`;
+                let baseIPv4 = `192.168.${vlanId}`;
+
+                redGlobal.push({ id: i, nivel: 1, tipo: 'Switch', nombre: `SW-Piso${i}`, fabricante: 'Huawei', mac: generarMAC(), ipv4: `${baseIPv4}.2/24`, ipv6: `${prefijoIPv6}:2/64`, activo: true, padre: 0 });
+
+                for (let j = 0; j < usuariosPorPiso[i-1]; j++) {
+                    pcIdCounter++;
+                    let pcMac = generarMAC();
+                    redGlobal.push({ id: pcIdCounter, nivel: 2, tipo: 'PC', nombre: `PC${j+1}-P${i}`, fabricante: 'Lenovo', mac: pcMac, ipv4: `${baseIPv4}.${10 + j}/24`, ipv6: calcularEUI64(pcMac, prefijoIPv6), activo: true, padre: i });
+                }
+            }
+            actualizarVistas();
+            document.getElementById('script-output').value = ""; 
+        }
+
+        function toggleDispositivo(id) {
+            let index = redGlobal.findIndex(d => d.id === id);
+            if(index !== -1) { redGlobal[index].activo = !redGlobal[index].activo; actualizarVistas(); }
+        }
+
+        function actualizarVistas() {
+            renderGrafico(); renderInventario(); renderPresupuesto();
+        }
+
+        function renderGrafico() {
+            const nodes = new vis.DataSet(); const edges = new vis.DataSet();
+            const iconos = { 'Core': 'https://cdn-icons-png.flaticon.com/512/2311/2311148.png', 'Switch': 'https://cdn-icons-png.flaticon.com/512/814/814421.png', 'PC': 'https://cdn-icons-png.flaticon.com/512/3067/3067260.png' };
+
+            redGlobal.forEach(d => {
+                nodes.add({ id: d.id, label: d.nombre, shape: 'image', image: iconos[d.tipo], size: d.tipo === 'Core' ? 45 : (d.tipo === 'Switch' ? 35 : 25), level: d.nivel, opacity: d.activo ? 1 : 0.3 });
+                if (d.padre !== null) {
+                    let padreActivo = redGlobal.find(p => p.id === d.padre).activo;
+                    let conexionActiva = d.activo && padreActivo;
+                    edges.add({ from: d.padre, to: d.id, color: { color: conexionActiva ? '#94a3b8' : '#e2e8f0' }, dashes: !conexionActiva, width: 2 });
+                }
+            });
+
+            const container = document.getElementById('network-canvas');
+            const data = { nodes: nodes, edges: edges };
+            const options = { layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 120, nodeSpacing: 100 } }, physics: false, nodes: { font: { size: 12, color: '#1e293b', face: 'Inter' } } };
+            
+            if (visNetwork !== null) visNetwork.destroy();
+            visNetwork = new vis.Network(container, data, options);
+        }
+
+        function renderInventario() {
+            const tbody = document.getElementById('tabla-inventario');
+            tbody.innerHTML = '';
+            redGlobal.forEach(d => {
+                let badgeClass = d.activo ? 'badge active' : 'badge inactive';
+                let btnClass = d.activo ? 'btn-toggle disable' : 'btn-toggle enable';
+                let btnText = d.activo ? 'Inhabilitar' : 'Habilitar';
+                let rowStyle = d.activo ? '' : 'style="opacity: 0.5; background-color: #f8fafc;"';
+                tbody.innerHTML += `<tr ${rowStyle}><td><strong>${d.nombre}</strong></td><td>${d.tipo} (${d.fabricante})</td><td style="font-family: monospace;">${d.mac}</td><td style="font-family: monospace;">${d.ipv4}</td><td style="font-family: monospace;">${d.ipv6}</td><td><span class="${badgeClass}">${d.activo ? 'Operativo' : 'Caído'}</span></td><td><button class="${btnClass}" onclick="toggleDispositivo(${d.id})">${btnText}</button></td></tr>`;
+            });
+        }
+
+        function renderPresupuesto() {
+            const tbody = document.getElementById('tabla-presupuesto');
+            tbody.innerHTML = '';
+            let granTotal = 0;
+            ['Core', 'Switch', 'PC'].forEach(tipo => {
+                let activos = redGlobal.filter(d => d.tipo === tipo && d.activo).length;
+                if(activos > 0) {
+                    let subtotal = activos * PRECIOS[tipo].valor; granTotal += subtotal;
+                    tbody.innerHTML += `<tr><td><strong>${tipo}</strong></td><td>${PRECIOS[tipo].nombre}</td><td style="text-align: center;">${activos}</td><td>${formatoMoneda(PRECIOS[tipo].valor)}</td><td><strong>${formatoMoneda(subtotal)}</strong></td></tr>`;
+                }
+            });
+            document.getElementById('presupuesto-total').innerText = formatoMoneda(granTotal);
+        }
+
+        function generarScripts() {
+            const vendor = document.getElementById('vendor-select').value;
+            const numPisos = parseInt(document.getElementById('pisos').value);
+            let script = "";
+
+            if (vendor === 'cisco') {
+                script += "!\n! --- CONFIGURACIÓN CISCO IOS (ROUTER CORE) ---\n!\n";
+                script += "enable\nconfigure terminal\nhostname R1-Core\n!\n";
+                script += "ipv6 unicast-routing\n!\n";
+                for (let i = 1; i <= numPisos; i++) {
+                    let vlan = i * 10;
+                    script += `interface GigabitEthernet0/0.${vlan}\n`;
+                    script += ` encapsulation dot1Q ${vlan}\n`;
+                    script += ` ip address 192.168.${vlan}.1 255.255.255.0\n`;
+                    script += ` ipv6 address 2001:db8:acad:${vlan}::1/64\n`;
+                    script += ` ipv6 ospf 1 area 0\n!\n`;
+                }
+                script += "! --- CIBERDEFENSA: ZERO TRUST (BLOQUEO IA/BOTS) ---\n";
+                script += "ip access-list extended ZERO_TRUST_ACL\n";
+                script += " deny tcp any any eq 23 log ! Bloquear Telnet Inseguro\n";
+                script += " permit tcp 192.168.10.0 0.0.0.255 any eq 22 ! SSH solo de VLAN Admin\n";
+                script += " deny ip any any log ! Bloquear escaneos autónomos (Default Deny)\n!\n";
+                script += "line vty 0 4\n access-class ZERO_TRUST_ACL in\n transport input ssh\n!\nend\nwrite memory";
+            
+            } else if (vendor === 'huawei') {
+                script += "!\n! --- CONFIGURACIÓN HUAWEI VRP (SWITCHES DE ACCESO) ---\n!\n";
+                script += "system-view\nsysname SW-Accesos\n!\n";
+                let vlans = []; for(let i=1; i<=numPisos; i++) vlans.push(i*10);
+                script += `vlan batch ${vlans.join(" ")}\n!\n`;
+                script += "! --- CIBERDEFENSA: SEGURIDAD DE PUERTOS ---\n";
+                script += "interface GigabitEthernet0/0/1\n port link-type access\n";
+                script += " port security enable\n port security mac-address sticky\n";
+                script += " port security max-mac-num 2\n!\n";
+                script += "acl number 3000 description ZERO-TRUST\n";
+                script += " rule 5 deny tcp destination-port eq telnet\n";
+                script += " rule 10 permit tcp source 192.168.10.0 0.0.0.255 destination-port eq 22\n";
+                script += " rule 100 deny ip\n!\n";
+                script += "user-interface vty 0 4\n authentication-mode aaa\n protocol inbound ssh\n quit";
+
+            } else if (vendor === 'fortinet') {
+                script += "# --- CONFIGURACIÓN FORTINET (FIREWALL PERIMETRAL) ---\n\n";
+                script += "config system global\n set hostname FW-Core-Defense\nend\n\n";
+                script += "config firewall policy\n edit 1\n";
+                script += "  set name \"ZeroTrust-Deny-AI\"\n";
+                script += "  set srcintf \"any\"\n  set dstintf \"any\"\n";
+                script += "  set srcaddr \"all\"\n  set dstaddr \"all\"\n";
+                script += "  set action deny\n";
+                script += "  set schedule \"always\"\n";
+                script += "  set service \"TELNET\" \"HTTP\"\n";
+                script += "  set logtraffic all\n  set comments \"Bloqueo preventivo bots/IA no autorizada\"\n next\nend";
+
+            } else if (vendor === 'mikrotik') {
+                script += "# --- CONFIGURACIÓN MIKROTIK ROUTEROS (ROUTER DE BORDE) ---\n\n";
+                script += "/system identity set name=RT-Border\n\n";
+                for (let i = 1; i <= numPisos; i++) {
+                    let vlan = i * 10;
+                    script += `/ip address add address=192.168.${vlan}.1/24 interface=ether1.${vlan}\n`;
+                }
+                script += "\n# --- CIBERDEFENSA: FIREWALL FILTER (Drop IA/Scanners) ---\n";
+                script += "/ip firewall filter\n";
+                script += "add action=drop chain=input dst-port=23 protocol=tcp comment=\"Drop Telnet\"\n";
+                script += "add action=drop chain=forward connection-state=invalid comment=\"Drop Paquetes Invalidos\"\n";
+                script += "add action=drop chain=input src-address-list=port_scanners comment=\"Drop Escaneo de Puertos IA\"\n";
+                script += "/ip firewall raw\n";
+                script += "add action=drop chain=prerouting log=yes log-prefix=BOT_DROP src-address-list=blacklist";
+            }
+
+            document.getElementById('script-output').value = script;
+        }
+
+        function cambiarModulo(moduloId) {
+            document.querySelectorAll('.modulo').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('mod-' + moduloId).classList.add('active');
+            document.getElementById('btn-' + moduloId).classList.add('active');
+            if(moduloId === 'grafico' && visNetwork !== null) {
+                setTimeout(() => { visNetwork.redraw(); visNetwork.fit(); }, 50); 
+            }
+        }
+
+        window.onload = generarInfraestructura;
+    </script>
+</body>
+</html>
