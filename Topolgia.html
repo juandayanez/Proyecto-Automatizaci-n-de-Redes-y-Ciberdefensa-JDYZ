@@ -414,73 +414,88 @@
         }
 
         function generarScripts() {
+            if(!datosRed.empresa) { alert("Error: Genera la infraestructura en la pestaña 'Configuración Inicial' primero."); return; }
             const vendor = document.getElementById('vendor-select').value;
-            const numPisos = parseInt(document.getElementById('pisos').value);
-            let script = "";
+            let s = "";
 
             if (vendor === 'cisco') {
-                script += "!\n! --- CONFIGURACIÓN CISCO IOS (ROUTER CORE) ---\n!\n";
-                script += "enable\nconfigure terminal\nhostname R1-Core\n!\n";
-                script += "ipv6 unicast-routing\n!\n";
-                for (let i = 1; i <= numPisos; i++) {
+                s += `!\n! --- SCRIPT CORE: ${datosRed.empresa.toUpperCase()} (CISCO IOS) ---\n!\n`;
+                s += `hostname ${datosRed.empresa}-R1\n`;
+                s += `ip domain-name ${datosRed.empresa.toLowerCase().replace(/\s/g,'')}.local\n`;
+                s += `crypto key generate rsa modulus 2048\n`;
+                s += `username admin privilege 15 secret Admin@${datosRed.asn}#2026\n!\n`;
+                s += `banner motd ^C\n*** PROPIEDAD DE ${datosRed.empresa.toUpperCase()} ***\n*** ACCESO SOLO AUTORIZADO - ZERO TRUST ENFORCE ***\n^C\n!\n`;
+                s += `ipv6 unicast-routing\n!\n`;
+                
+                for (let i = 1; i <= datosRed.pisos; i++) {
                     let vlan = i * 10;
-                    script += `interface GigabitEthernet0/0.${vlan}\n`;
-                    script += ` encapsulation dot1Q ${vlan}\n`;
-                    script += ` ip address 192.168.${vlan}.1 255.255.255.0\n`;
-                    script += ` ipv6 address 2001:db8:acad:${vlan}::1/64\n`;
-                    script += ` ipv6 ospf 1 area 0\n!\n`;
+                    s += `interface GigabitEthernet0/0.${vlan}\n`;
+                    s += ` description LAN PISO ${i} - VLAN ${vlan}\n`;
+                    s += ` encapsulation dot1Q ${vlan}\n`;
+                    s += ` ip address ${datosRed.ipv4}.${vlan}.1 255.255.255.0\n`;
+                    s += ` ipv6 address ${datosRed.ipv6}:${vlan}::1/64\n`;
+                    s += ` ipv6 ospf ${datosRed.asn} area 0\n!\n`;
                 }
-                script += "! --- CIBERDEFENSA: ZERO TRUST (BLOQUEO IA/BOTS) ---\n";
-                script += "ip access-list extended ZERO_TRUST_ACL\n";
-                script += " deny tcp any any eq 23 log ! Bloquear Telnet Inseguro\n";
-                script += " permit tcp 192.168.10.0 0.0.0.255 any eq 22 ! SSH solo de VLAN Admin\n";
-                script += " deny ip any any log ! Bloquear escaneos autónomos (Default Deny)\n!\n";
-                script += "line vty 0 4\n access-class ZERO_TRUST_ACL in\n transport input ssh\n!\nend\nwrite memory";
+                s += `! --- POLITICAS DE CIBERDEFENSA (ANTI-IA) ---\n`;
+                s += `ip access-list extended ZERO_TRUST_ADMIN\n permit tcp ${datosRed.ipv4}.10.0 0.0.0.255 any eq 22 log\n deny ip any any log\n!\n`;
+                s += `line vty 0 4\n access-class ZERO_TRUST_ADMIN in\n login local\n transport input ssh\n!\nwrite memory`;
             
             } else if (vendor === 'huawei') {
-                script += "!\n! --- CONFIGURACIÓN HUAWEI VRP (SWITCHES DE ACCESO) ---\n!\n";
-                script += "system-view\nsysname SW-Accesos\n!\n";
-                let vlans = []; for(let i=1; i<=numPisos; i++) vlans.push(i*10);
-                script += `vlan batch ${vlans.join(" ")}\n!\n`;
-                script += "! --- CIBERDEFENSA: SEGURIDAD DE PUERTOS ---\n";
-                script += "interface GigabitEthernet0/0/1\n port link-type access\n";
-                script += " port security enable\n port security mac-address sticky\n";
-                script += " port security max-mac-num 2\n!\n";
-                script += "acl number 3000 description ZERO-TRUST\n";
-                script += " rule 5 deny tcp destination-port eq telnet\n";
-                script += " rule 10 permit tcp source 192.168.10.0 0.0.0.255 destination-port eq 22\n";
-                script += " rule 100 deny ip\n!\n";
-                script += "user-interface vty 0 4\n authentication-mode aaa\n protocol inbound ssh\n quit";
-
+                s += `!\n! --- SCRIPT ACCESO: ${datosRed.empresa.toUpperCase()} (HUAWEI VRP) ---\n!\n`;
+                s += `system-view\nsysname ${datosRed.empresa}-SW-Acceso\n!\n`;
+                s += `stp mode rstp\nstp bpdu-protection\n!\n`;
+                s += `header login information "PROPIEDAD DE ${datosRed.empresa} - ACCESO RESTRINGIDO"\n!\n`;
+                
+                let vlans = []; for(let i=1; i<=datosRed.pisos; i++) vlans.push(i*10);
+                s += `vlan batch ${vlans.join(" ")}\n!\n`;
+                s += `! --- CIBERDEFENSA: HARDENING DE PUERTOS ---\n`;
+                s += `interface GigabitEthernet0/0/1\n port link-type access\n port security enable\n port security mac-address sticky\n port security max-mac-num 2\n stp edged-port enable\n!\n`;
+                s += `aaa\n local-user admin password irreversible-cipher Admin@${datosRed.asn}#2026\n local-user admin privilege level 15\n local-user admin service-type ssh\n quit\n!\n`;
+                s += `stelnet server enable\nuser-interface vty 0 4\n authentication-mode aaa\n protocol inbound ssh\n`;
+                
             } else if (vendor === 'fortinet') {
-                script += "# --- CONFIGURACIÓN FORTINET (FIREWALL PERIMETRAL) ---\n\n";
-                script += "config system global\n set hostname FW-Core-Defense\nend\n\n";
-                script += "config firewall policy\n edit 1\n";
-                script += "  set name \"ZeroTrust-Deny-AI\"\n";
-                script += "  set srcintf \"any\"\n  set dstintf \"any\"\n";
-                script += "  set srcaddr \"all\"\n  set dstaddr \"all\"\n";
-                script += "  set action deny\n";
-                script += "  set schedule \"always\"\n";
-                script += "  set service \"TELNET\" \"HTTP\"\n";
-                script += "  set logtraffic all\n  set comments \"Bloqueo preventivo bots/IA no autorizada\"\n next\nend";
+                s += `# --- SCRIPT FIREWALL: ${datosRed.empresa.toUpperCase()} (FORTINET FORTIOS) ---\n\n`;
+                s += `config system global\n set hostname ${datosRed.empresa}-FW-Defense\nend\n\n`;
+                s += `config system interface\n`;
+                for (let i = 1; i <= datosRed.pisos; i++) {
+                    let vlan = i * 10;
+                    s += ` edit "vlan${vlan}"\n`;
+                    s += `  set vdom "root"\n`;
+                    s += `  set ip ${datosRed.ipv4}.${vlan}.254 255.255.255.0\n`;
+                    s += `  set allowaccess ping https ssh\n`;
+                    s += `  set interface "internal"\n  set vlanid ${vlan}\n next\n`;
+                }
+                s += `end\n\n`;
+                s += `# --- CIBERDEFENSA: ZERO TRUST (BLOQUEO IA/BOTS) ---\n`;
+                s += `config firewall policy\n edit 1\n`;
+                s += `  set name "ZeroTrust-Deny-Scanners"\n`;
+                s += `  set srcintf "any"\n  set dstintf "any"\n`;
+                s += `  set srcaddr "all"\n  set dstaddr "all"\n`;
+                s += `  set action deny\n`;
+                s += `  set schedule "always"\n`;
+                s += `  set service "TELNET" "HTTP"\n`;
+                s += `  set logtraffic all\n  set comments "Drop preventivo de trafico de administracion inseguro y bots"\n next\nend`;
 
             } else if (vendor === 'mikrotik') {
-                script += "# --- CONFIGURACIÓN MIKROTIK ROUTEROS (ROUTER DE BORDE) ---\n\n";
-                script += "/system identity set name=RT-Border\n\n";
-                for (let i = 1; i <= numPisos; i++) {
+                s += `# --- SCRIPT BORDE: ${datosRed.empresa.toUpperCase()} (MIKROTIK ROUTEROS) ---\n\n`;
+                s += `/system identity set name=${datosRed.empresa}-RT-Border\n\n`;
+                s += `# Creacion de interfaces VLAN\n`;
+                for (let i = 1; i <= datosRed.pisos; i++) {
                     let vlan = i * 10;
-                    script += `/ip address add address=192.168.${vlan}.1/24 interface=ether1.${vlan}\n`;
+                    s += `/interface vlan add interface=ether1 name=vlan${vlan} vlan-id=${vlan}\n`;
+                    s += `/ip address add address=${datosRed.ipv4}.${vlan}.254/24 interface=vlan${vlan}\n`;
                 }
-                script += "\n# --- CIBERDEFENSA: FIREWALL FILTER (Drop IA/Scanners) ---\n";
-                script += "/ip firewall filter\n";
-                script += "add action=drop chain=input dst-port=23 protocol=tcp comment=\"Drop Telnet\"\n";
-                script += "add action=drop chain=forward connection-state=invalid comment=\"Drop Paquetes Invalidos\"\n";
-                script += "add action=drop chain=input src-address-list=port_scanners comment=\"Drop Escaneo de Puertos IA\"\n";
-                script += "/ip firewall raw\n";
-                script += "add action=drop chain=prerouting log=yes log-prefix=BOT_DROP src-address-list=blacklist";
+                s += `\n# --- CIBERDEFENSA: FIREWALL FILTER (Drop IA/Scanners) ---\n`;
+                s += `/ip firewall filter\n`;
+                s += `add action=drop chain=input dst-port=23 protocol=tcp comment="Deny Telnet (Cleartext)"\n`;
+                s += `add action=drop chain=forward connection-state=invalid comment="Drop Invalid Packets"\n`;
+                s += `add action=add-src-to-address-list address-list=port_scanners address-list-timeout=2w chain=input protocol=tcp psd=21,3s,3,1 comment="Detect Port Scanners (Bots/IA)"\n`;
+                s += `add action=drop chain=input src-address-list=port_scanners comment="Drop detected scanners"\n`;
+                s += `/ip firewall raw\n`;
+                s += `add action=drop chain=prerouting log=yes log-prefix=BOT_DROP src-address-list=blacklist`;
             }
 
-            document.getElementById('script-output').value = script;
+            document.getElementById('script-output').value = s;
         }
 
         function cambiarModulo(moduloId) {
